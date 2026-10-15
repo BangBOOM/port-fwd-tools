@@ -1,0 +1,13 @@
+/bin/
+/dist/
+*.test
+coverage.out
+.DS_Store
+
+# Local Python caches and resource measurement outputs.
+__pycache__/
+*.py[cod]
+/benchmarks/**/raw.json
+/benchmarks/**/summary.json
+/benchmarks/**/run.log
+/benchmarks/**/*.json.tmp
