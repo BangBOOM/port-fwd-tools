@@ -106,7 +106,20 @@ Normal connections show connection age and auto reconnect settings in the detail
 panel. Connection issues show a short error reason, retry countdown, and reconnect
 action. Full SSH output is available through **l / Enter**, rather than appearing
 inline. The footer shows frequently used actions and changes **Start / Stop** to
-match the selected tunnel; **?** lists all keys, including deletion and themes.
+match the selected tunnel. **d Delete** stays visible even in narrow windows;
+**?** lists all keys, including themes and actions omitted at smaller widths.
+
+Press **d** to replace the selected tunnel's detail panel with a deletion
+confirmation showing its name, local port, SSH host, and remote destination.
+Press **y** to stop forwarding, cancel automatic retries, and remove the saved
+rule. **n / Esc / Enter** cancels; no action runs until you confirm. The selected
+rule's identity and displayed route stay fixed while background state refreshes.
+If another client removes that rule, its confirmation closes without targeting
+another row. Failures show the reason and allow retrying or cancelling.
+Successful deletion briefly shows `Deleted "NAME".` and selects the next row,
+or the previous row when deleting the last item. Deleting the only rule returns
+to the empty list. Confirmation reuses the existing panel and adds no background
+workers or dependencies.
 
 ## Traffic totals
 

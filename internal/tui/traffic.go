@@ -23,7 +23,7 @@ type trafficResult []trafficSample
 // Sampling is owned entirely by the TUI, not the daemon. With no open TUI there
 // are no statistics timers, workers, socket queries, or counter storage.
 func (m *Model) pollTraffic() tea.Cmd {
-	if m.trafficBusy || !m.focused || !m.connected || m.client == nil || m.form != nil || m.logs || m.help || m.busy || m.width < 54 || m.height < 20 {
+	if m.trafficBusy || !m.focused || !m.connected || m.client == nil || m.form != nil || m.deleting != nil || m.logs || m.help || m.busy || m.width < 54 || m.height < 20 {
 		return nil
 	}
 	if time.Now().Before(m.nextTraffic) {

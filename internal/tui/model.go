@@ -17,6 +17,7 @@ type result struct {
 	state      daemon.Snapshot
 	err        error
 	mutation   bool
+	action     string
 	selectName string
 }
 type tick time.Time
@@ -36,7 +37,7 @@ type Model struct {
 	message         string
 	busy            bool
 	connected       bool
-	deleteID        string
+	deleting        *core.Rule
 	logs, help      bool
 	logOffset       int
 	theme           string
@@ -64,7 +65,7 @@ func nextTick() tea.Cmd { return tea.Tick(time.Second, func(t time.Time) tea.Msg
 func (m Model) request(req daemon.Request) tea.Cmd {
 	return func() tea.Msg {
 		s, err := m.client.Do(req)
-		return result{state: s, err: err, mutation: req.Action != "state", selectName: req.Rule.Name}
+		return result{state: s, err: err, mutation: req.Action != "state", action: req.Action, selectName: req.Rule.Name}
 	}
 }
 func (m *Model) chosen() *daemon.Tunnel {
@@ -93,7 +94,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tick:
 		if !m.noticeUntil.IsZero() && time.Now().After(m.noticeUntil) {
-			if m.message == "Saved." || strings.HasPrefix(m.message, "Theme: ") {
+			if m.message == "Saved." || strings.HasPrefix(m.message, "Theme: ") || strings.HasPrefix(m.message, "Deleted ") || strings.HasPrefix(m.message, "Tunnel ") {
 				m.message = ""
 			}
 			m.noticeUntil = time.Time{}
@@ -109,6 +110,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.err != nil {
 			m.message = v.err.Error()
+			m.noticeUntil = time.Time{}
+			if v.action == "delete" {
+				m.message = "Delete failed: " + m.message
+			}
 			if !v.mutation {
 				m.connected = false
 			}
@@ -130,10 +135,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.mutation {
 			m.form = nil
 			m.message = "Saved."
+			if v.action == "delete" && m.deleting != nil {
+				m.message = fmt.Sprintf("Deleted %q.", m.deleting.Name)
+			}
 			m.noticeUntil = time.Now().Add(3 * time.Second)
-			m.deleteID = ""
+			m.deleting = nil
 		} else if strings.HasPrefix(m.message, "cannot reach daemon") {
 			m.message = ""
+		}
+		if m.deleting != nil && !m.busy && !m.deleteTargetExists() {
+			m.message = fmt.Sprintf("Tunnel %q no longer exists.", m.deleting.Name)
+			m.noticeUntil = time.Now().Add(3 * time.Second)
+			m.deleting = nil
 		}
 		traffic := m.pollTraffic()
 		return m, traffic
@@ -152,14 +165,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.form != nil {
 			return m.updateForm(v)
 		}
-		if m.deleteID != "" {
+		if m.deleting != nil {
 			switch key {
 			case "y", "Y":
+				if !m.connected || m.width < 54 || m.height < 20 {
+					return m, nil
+				}
 				m.busy = true
-				return m, m.request(daemon.Request{Action: "delete", ID: m.deleteID})
-			case "n", "N", "esc":
-				m.deleteID = ""
 				m.message = ""
+				return m, m.request(daemon.Request{Action: "delete", ID: m.deleting.ID})
+			case "n", "N", "esc", "enter":
+				m.deleting = nil
+				m.message = ""
+			case "q":
+				return m, tea.Quit
 			}
 			return m, nil
 		}
@@ -205,9 +224,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.logOffset = 0
 			}
 		case "d":
+			if m.width < 54 || m.height < 20 {
+				return m, nil
+			}
 			if t := m.chosen(); t != nil {
-				m.deleteID = t.Rule.ID
-				m.message = "[y/N] Delete and stop " + t.Rule.Name + "?"
+				rule := t.Rule // Freeze the identity and route while state refreshes.
+				m.deleting = &rule
+				m.message = ""
+				m.noticeUntil = time.Time{}
 			}
 		case "space", " ", "r":
 			if t := m.chosen(); t != nil {

@@ -173,6 +173,9 @@ func (m Model) selectedPanel(t daemon.Tunnel, width int, c tableColumns) []strin
 }
 
 func (m Model) listFooter(width int, selected *daemon.Tunnel) string {
+	if m.deleting != nil {
+		return m.deleteFooter()
+	}
 	if selected == nil {
 		return "a Add · ? Help · q Detach"
 	}
@@ -180,20 +183,25 @@ func (m Model) listFooter(width int, selected *daemon.Tunnel) string {
 	if !selected.Rule.Enabled {
 		action = "Start"
 	}
-	if width < 65 {
-		return "a Add · Space " + action + " · l Logs · ? Help · q Detach"
+	full := "a Add · e Edit · d Delete · Space " + action + " · l Logs · ? Help · q Detach"
+	if ansi.StringWidth(full) > width {
+		return "a Add · d Delete · Space " + action + " · ? Help · q Detach"
 	}
-	return "a Add · e Edit · Space " + action + " · l Logs · ? Help · q Detach"
+	return full
+}
+
+func (m Model) listMessageVisible() bool {
+	return m.deleting == nil && m.message != "" && (m.connected || !strings.HasPrefix(m.message, "cannot reach daemon"))
 }
 
 // Shared by rendering and sampling so offscreen rows incur no statistics work.
 func (m Model) listRange(h int) (int, int) {
 	bottom := 2 // blank line and footer
 	count := len(m.state.Tunnels)
-	if count > 0 || !m.connected {
+	if count > 0 || !m.connected || m.deleting != nil {
 		bottom += 4 // separator and three-line detail panel
 	}
-	if m.message != "" && (m.connected || !strings.HasPrefix(m.message, "cannot reach daemon")) {
+	if m.listMessageVisible() {
 		bottom++
 	}
 	capacity := max(1, h-3-bottom)
@@ -218,11 +226,14 @@ func (m Model) listView(w, h int) string {
 		bottom = append(bottom, m.styles.dim.Render(strings.Repeat("─", w)))
 		bottom = append(bottom, m.selectedPanel(*tunnel, w, c)...)
 	}
-	if !m.connected {
+	if m.deleting != nil {
+		bottom = []string{m.styles.warn.Render(strings.Repeat("─", w))}
+		bottom = append(bottom, m.deletePanel(w)...)
+	} else if !m.connected {
 		bottom = []string{m.styles.bad.Render(strings.Repeat("─", w)), m.styles.bad.Render("Background service unavailable"), "Waiting for daemon. Reopen pf to restart it.", "Shown tunnel states may be out of date."}
 	}
 	bottom = append(bottom, "", m.styles.dim.Render(m.listFooter(w, tunnel)))
-	if m.message != "" && (m.connected || !strings.HasPrefix(m.message, "cannot reach daemon")) {
+	if m.listMessageVisible() {
 		bottom = append(bottom, m.styles.warn.Render(m.message))
 	}
 	start, end := m.listRange(h)

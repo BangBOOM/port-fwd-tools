@@ -58,7 +58,7 @@ func TestTrafficOnlySamplesVisibleRowsAndThrottles(t *testing.T) {
 }
 
 func TestTrafficPausesOutsideVisibleList(t *testing.T) {
-	for _, mode := range []string{"blur", "form", "logs", "help", "busy", "offline", "small"} {
+	for _, mode := range []string{"blur", "form", "delete", "logs", "help", "busy", "offline", "small"} {
 		t.Run(mode, func(t *testing.T) {
 			m := trafficModel(t)
 			switch mode {
@@ -67,6 +67,9 @@ func TestTrafficPausesOutsideVisibleList(t *testing.T) {
 				m = updated.(Model)
 			case "form":
 				m.openForm(nil)
+			case "delete":
+				rule := m.state.Tunnels[0].Rule
+				m.deleting = &rule
 			case "logs":
 				m.logs = true
 			case "help":

@@ -38,7 +38,7 @@ func TestLayoutKeepsActionsVisibleAndEnglish(t *testing.T) {
 	for _, size := range [][2]int{{54, 20}, {80, 24}, {100, 32}} {
 		m := New(nil)
 		m.width, m.height = size[0], size[1]
-		m.message = "[y/N] Delete and stop database?"
+		m.message = "Deleted \"database\"."
 		for i := 0; i < 15; i++ {
 			m.state.Tunnels = append(m.state.Tunnels, daemon.Tunnel{Rule: core.Rule{ID: fmt.Sprintf("%016x", i), Name: fmt.Sprintf("database-%d", i), SSHHost: "my-server", LocalPort: 15432 + i, RemoteHost: "localhost", RemotePort: 5432, Enabled: true, AutoReconnect: true}, Status: "connected", Logs: []string{"Connected", "Listener ready"}})
 		}
@@ -53,7 +53,7 @@ func TestLayoutKeepsActionsVisibleAndEnglish(t *testing.T) {
 		if size[0] < 68 {
 			remoteHeader = "Remote target"
 		}
-		for _, s := range []string{"Local port", remoteHeader, "SSH", "Status", "15446", "localhost:5432", "my-server", "q Detach", "[y/N]"} {
+		for _, s := range []string{"Local port", remoteHeader, "SSH", "Status", "15446", "localhost:5432", "my-server", "d Delete", "q Detach", "Deleted \"database\"."} {
 			if !strings.Contains(view, s) {
 				t.Fatalf("%v missing %q:\n%s", size, s, view)
 			}

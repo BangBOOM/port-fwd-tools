@@ -276,6 +276,14 @@ func TestRealSSHForwardReconnectStopAndReload(t *testing.T) {
 	if len(m.Snapshot().Tunnels) != 0 {
 		t.Fatal("delete did not remove rule")
 	}
+	if c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", r.LocalPort), 100*time.Millisecond); err == nil {
+		c.Close()
+		t.Fatal("delete left the local listener running")
+	}
+	config, err := core.Load(paths.Config)
+	if err != nil || len(config.Rules) != 0 {
+		t.Fatalf("deleted rule remained in saved configuration: %+v %v", config, err)
+	}
 }
 
 func TestPortConflictAndAuthenticationPause(t *testing.T) {

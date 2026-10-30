@@ -121,7 +121,14 @@ func (m *Manager) Snapshot() Snapshot {
 
 func (m *Manager) resolve(id string) (string, error) {
 	for _, r := range m.config.Rules {
-		if r.ID == id || r.Name == id {
+		if r.ID == id {
+			return r.ID, nil
+		}
+	}
+	// TUI mutations use full IDs. A rule named after another rule's ID must
+	// never redirect an operation intended for that exact identity.
+	for _, r := range m.config.Rules {
+		if r.Name == id {
 			return r.ID, nil
 		}
 	}
