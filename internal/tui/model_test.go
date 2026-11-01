@@ -53,7 +53,7 @@ func TestLayoutKeepsActionsVisibleAndEnglish(t *testing.T) {
 		if size[0] < 68 {
 			remoteHeader = "Remote target"
 		}
-		for _, s := range []string{"Local port", remoteHeader, "SSH", "Status", "15446", "localhost:5432", "my-server", "d Delete", "q Detach", "Deleted \"database\"."} {
+		for _, s := range []string{"Local port", remoteHeader, "SSH", "Status", "15446", "localhost:5432", "my-server", "[d] Delete", "[q] Detach", "Deleted \"database\"."} {
 			if !strings.Contains(view, s) {
 				t.Fatalf("%v missing %q:\n%s", size, s, view)
 			}

@@ -47,7 +47,7 @@ Usage: pf [--home DIR] [--theme terminal|dracula] [command]
   theme [NAME]         Show / save UI theme: terminal (default) or dracula
   version              Print version
 
-TUI: a Add · e Edit · Space Start/Stop · r Reconnect · d Delete · l Logs · t Theme
+TUI: a Add · e Edit · Space Start/Stop · r Reconnect · d Delete · l Logs · p Ports · t Theme
      q / Ctrl+C detaches; tunnels keep running in the background.
 
 Passwordless SSH only. Uses ~/.ssh/config and ssh-agent. Verify new hosts
