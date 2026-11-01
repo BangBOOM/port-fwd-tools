@@ -21,6 +21,25 @@ type result struct {
 	selectName string
 }
 type tick time.Time
+
+// Top-level tabs shown in the header. tabCount doubles as the cycle length.
+const (
+	tabTunnels = iota
+	tabPorts
+	tabCount
+)
+
+// switchTab cycles by delta and lazily starts a port scan when the Ports tab
+// is entered. Modal overlays never call this, so it cannot fire mid-edit.
+func (m *Model) switchTab(delta int) tea.Cmd {
+	m.tab = (m.tab + delta + tabCount) % tabCount
+	if m.tab == tabPorts && !m.portsBusy {
+		m.portsBusy = true
+		return scanPorts()
+	}
+	return nil
+}
+
 type editor struct {
 	fields   []textinput.Model
 	focus    int
@@ -40,6 +59,12 @@ type Model struct {
 	deleting        *core.Rule
 	logs, help      bool
 	logOffset       int
+	tab             int
+	portsBusy       bool
+	portsData       []portListener
+	portsErr        string
+	portsCursor     int
+	portsKilling    *portListener
 	theme           string
 	preferencesPath string
 	styles          styles
@@ -85,6 +110,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case trafficResult:
 		m.receiveTraffic(v)
 		return m, nil
+	case portsResult:
+		m.portsBusy = false
+		if m.tab != tabPorts {
+			m.portsData = nil // Left the tab meanwhile: drop the stale snapshot.
+			return m, nil
+		}
+		if v.err != nil {
+			m.portsErr = v.err.Error()
+		} else {
+			m.portsErr = ""
+			m.portsData = v.listeners
+			m.portsCursor = min(m.portsCursor, max(0, len(m.portsData)-1))
+		}
+		return m, nil
+	case killResult:
+		m.portsBusy = false
+		if m.tab != tabPorts {
+			return m, nil
+		}
+		if v.err != nil {
+			m.message = "Kill failed: " + v.err.Error()
+			return m, nil
+		}
+		if v.stale {
+			m.message = fmt.Sprintf("Killed %s (%d). It was already gone.", v.name, v.pid)
+		} else {
+			m.message = fmt.Sprintf("Killed %s (%d).", v.name, v.pid)
+		}
+		m.noticeUntil = time.Now().Add(3 * time.Second)
+		m.portsErr = ""
+		m.portsBusy = true // Refresh the list so the freed port disappears.
+		return m, scanPorts()
 	case tea.WindowSizeMsg:
 		m.width, m.height = v.Width, v.Height
 		if m.form != nil {
@@ -94,7 +151,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tick:
 		if !m.noticeUntil.IsZero() && time.Now().After(m.noticeUntil) {
-			if m.message == "Saved." || strings.HasPrefix(m.message, "Theme: ") || strings.HasPrefix(m.message, "Deleted ") || strings.HasPrefix(m.message, "Tunnel ") {
+			if m.message == "Saved." || strings.HasPrefix(m.message, "Theme: ") || strings.HasPrefix(m.message, "Deleted ") || strings.HasPrefix(m.message, "Tunnel ") || strings.HasPrefix(m.message, "Killed ") || strings.HasPrefix(m.message, "Kill failed: ") {
 				m.message = ""
 			}
 			m.noticeUntil = time.Time{}
@@ -199,6 +256,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.tab == tabPorts {
+			if m.portsKilling != nil {
+				switch key {
+				case "y", "Y":
+					frozen := *m.portsKilling
+					m.portsKilling = nil
+					m.portsBusy = true
+					m.message = "Killing…"
+					m.noticeUntil = time.Time{}
+					return m, killListener(frozen)
+				case "n", "N", "esc":
+					m.portsKilling = nil
+					m.message = ""
+				case "q":
+					return m, tea.Quit
+				}
+				return m, nil
+			}
+			page := max(1, m.height-9)
+			switch key {
+			case "q":
+				return m, tea.Quit
+			case "left":
+				return m, m.switchTab(-1)
+			case "right", "p":
+				return m, m.switchTab(1)
+			case "r":
+				if !m.portsBusy {
+					m.portsBusy = true
+					return m, scanPorts()
+				}
+			case "d":
+				if !m.portsBusy && len(m.portsData) > 0 && m.width >= 54 && m.height >= 20 {
+					row := m.portsData[max(0, min(m.portsCursor, len(m.portsData)-1))]
+					m.portsKilling = &row
+					m.message = ""
+					m.noticeUntil = time.Time{}
+				}
+			case "up", "k":
+				m.portsCursor = max(0, m.portsCursor-1)
+			case "down", "j":
+				m.portsCursor = min(max(0, len(m.portsData)-1), m.portsCursor+1)
+			case "pgup":
+				m.portsCursor = max(0, m.portsCursor-page)
+			case "pgdown":
+				m.portsCursor = min(max(0, len(m.portsData)-1), m.portsCursor+page)
+			case "end":
+				m.portsCursor = max(0, len(m.portsData)-1)
+			}
+			return m, nil
+		}
 		switch key {
 		case "q":
 			return m, tea.Quit
@@ -223,6 +331,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.logs = true
 				m.logOffset = 0
 			}
+		case "left":
+			return m, m.switchTab(-1)
+		case "right", "p":
+			return m, m.switchTab(1)
 		case "d":
 			if m.width < 54 || m.height < 20 {
 				return m, nil
@@ -379,13 +491,15 @@ func (m Model) View() tea.View {
 	w, h := max(1, m.width-4), max(1, m.height-2)
 	var content string
 	if m.width < 54 || m.height < 20 {
-		content = "PORT FWD\nResize terminal to at least 54 columns × 20 rows.\n[q / Ctrl+C] Detach; tunnels keep running."
+		content = "PORT FWD\nResize terminal to at least 54 columns × 20 rows.\n[q/Ctrl+C] Detach; tunnels keep running."
 	} else if m.form != nil {
 		content = m.formView(w, h)
 	} else if m.help {
 		content = m.helpView()
 	} else if m.logs {
 		content = m.logsView(w, h)
+	} else if m.tab == tabPorts {
+		content = m.portsView(w, h)
 	} else {
 		content = m.listView(w, h)
 	}
@@ -464,8 +578,8 @@ func (m Model) formView(w, h int) string {
 	} else {
 		fmt.Fprintln(&b)
 	}
-	fmt.Fprintln(&b, "[Tab/Shift+Tab] Move  [Enter] Parse/Next")
-	fmt.Fprint(&b, "[Ctrl+S] Save  [Esc] Cancel  [Space] Toggle checkbox")
+	fmt.Fprintln(&b, "[Tab/Shift+Tab] Move · [Enter] Parse/Next")
+	fmt.Fprint(&b, "[Ctrl+S] Save · [Esc] Cancel · [Space] Toggle checkbox")
 	return b.String()
 }
 
@@ -480,7 +594,7 @@ func (m Model) logsView(w, h int) string {
 	}
 	end := max(0, len(lines)-min(m.logOffset, max(0, len(lines)-1)))
 	start := max(0, end-max(1, h-5))
-	return m.styles.accent.Render("EVENT LOG / "+t.Rule.Name) + "\n" + m.status(t) + "\n\n" + strings.Join(lines[start:end], "\n") + "\n" + m.styles.dim.Render("[↑/↓ PgUp/PgDn] Scroll  [End] Latest  [Esc/l/q] Back")
+	return m.styles.accent.Render("EVENT LOG / "+t.Rule.Name) + "\n" + m.status(t) + "\n\n" + strings.Join(lines[start:end], "\n") + "\n" + m.styles.dim.Render("[↑/↓ PgUp/PgDn] Scroll · [End] Latest · [Esc/l/q] Back")
 }
 func (m Model) helpView() string {
 	return m.styles.accent.Render("PORT FWD / Help") + `
@@ -491,6 +605,8 @@ func (m Model) helpView() string {
   r             Reconnect, including after an authentication error
   d             Delete with confirmation
   l / Enter     Open live event log
+  ← / →, p      Switch between Tunnels and Ports tabs
+  Ports tab     r rescan · d kills the selected process · y confirms
   t             Switch terminal / Dracula theme and save
   Up / Down     Select a tunnel
   q / Ctrl+C    Detach TUI; tunnels keep running

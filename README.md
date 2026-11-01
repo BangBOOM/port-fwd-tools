@@ -91,12 +91,20 @@ If the port is occupied, `pf` reports the error and waits for you to reconnect.
 | r | Start or reconnect, including after a paused error |
 | d | Delete a rule and stop its tunnel, with confirmation |
 | l / Enter | Open the live event log |
+| ← / →, p | Switch between the Tunnels and Ports tabs |
 | t | Switch between terminal and Dracula themes; save selection |
 | ? | Show help |
 | q / Ctrl+C | Detach TUI; tunnels keep running |
 
 In the log view, use arrows or Page Up / Page Down to scroll, **End** for latest,
-and **Esc / l / q** to return. Terminal minimum: 54 columns × 20 rows;
+and **Esc / l / q** to return. The header shows tabs (**← / →** or **p** to
+switch); the Ports tab lists listening TCP ports with their processes. **r**
+rescans and **d** kills the selected process after a **y/n** confirmation:
+SIGTERM first, escalating to SIGKILL after two seconds. Ports claimed by saved
+tunnels are marked **pf** and warn before killing, because pf may restart its
+own process; stopping the tunnel from the list is the cleaner path there. The
+selected row shows the full command
+line. Terminal minimum: 54 columns × 20 rows;
 80 × 24 or larger is recommended. The list expands with the terminal height;
 the selected tunnel and action hints stay visible at the bottom. Long hostnames
 are shortened while local and remote port numbers remain intact. List order stays

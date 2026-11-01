@@ -83,7 +83,7 @@ func TestDeleteConfirmationKeepsLayoutAndPorts(t *testing.T) {
 			for _, enabled := range []bool{true, false} {
 				m.state.Tunnels[0].Rule.Enabled = enabled
 				view := ansi.Strip(m.View().Content)
-				if !strings.Contains(view, "d Delete") || !strings.Contains(view, "q Detach") {
+				if !strings.Contains(view, "[d] Delete") || !strings.Contains(view, "[q] Detach") {
 					t.Fatalf("actions clipped at %v:\n%s", size, view)
 				}
 			}
@@ -94,7 +94,7 @@ func TestDeleteConfirmationKeepsLayoutAndPorts(t *testing.T) {
 				t.Fatal("confirmation reduced list space")
 			}
 			view := ansi.Strip(m.View().Content)
-			for _, label := range []string{`Delete "database-0"?`, "Local 15432 → my-server → localhost:5432", "Stops forwarding and removes the saved rule.", "y Delete · n / Esc Cancel"} {
+			for _, label := range []string{`Delete "database-0"?`, "Local 15432 → my-server → localhost:5432", "Stops forwarding and removes the saved rule.", "[y] Delete · [n/Esc] Cancel"} {
 				if !strings.Contains(view, label) {
 					t.Fatalf("%s %v missing %q:\n%s", theme, size, label, view)
 				}
@@ -176,7 +176,7 @@ func TestDeleteFailureAllowsRetryAndOfflineCancel(t *testing.T) {
 		t.Fatal("failure lost the confirmation or rules")
 	}
 	view := ansi.Strip(m.View().Content)
-	for _, label := range []string{"Delete failed: configuration is read-only", "y Retry delete", "n / Esc Cancel"} {
+	for _, label := range []string{"Delete failed: configuration is read-only", "[y] Retry delete", "[n/Esc] Cancel"} {
 		if !strings.Contains(view, label) {
 			t.Fatalf("missing failure action %q:\n%s", label, view)
 		}

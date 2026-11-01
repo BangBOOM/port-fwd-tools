@@ -39,12 +39,12 @@ func (m Model) deletePanel(width int) []string {
 func (m Model) deleteFooter() string {
 	switch {
 	case m.busy:
-		return "Deleting… · Ctrl+C Detach"
+		return "Deleting… · [Ctrl+C] Detach"
 	case !m.connected:
-		return "n / Esc Cancel · q Detach"
+		return "[n/Esc] Cancel · [q] Detach"
 	case strings.HasPrefix(m.message, "Delete failed: "):
-		return "y Retry delete · n / Esc Cancel"
+		return "[y] Retry delete · [n/Esc] Cancel"
 	default:
-		return "y Delete · n / Esc Cancel"
+		return "[y] Delete · [n/Esc] Cancel"
 	}
 }

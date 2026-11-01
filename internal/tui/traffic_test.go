@@ -125,7 +125,7 @@ func TestTrafficLayoutRetainsBothPorts(t *testing.T) {
 		if width < 70 {
 			expected = "SSH totals ↓2.0MB ↑1.0MB"
 		}
-		for _, text := range []string{expected, "15461", "localhost:5432", "q Detach"} {
+		for _, text := range []string{expected, "15461", "localhost:5432", "[q] Detach"} {
 			if !strings.Contains(view, text) {
 				t.Fatalf("width %d missing %q:\n%s", width, text, view)
 			}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/BangBOOM/port-fwd-tools/internal/daemon"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -52,7 +53,43 @@ func (m Model) rowStatus(t daemon.Tunnel) string {
 	}
 }
 
+// tabsHeader renders the top-level tab bar; the active tab is accented.
+func (m Model) tabsHeader() string {
+	names := [tabCount]string{"TUNNELS", "PORTS"}
+	parts := make([]string, tabCount)
+	for i, name := range names {
+		style := m.styles.dim
+		if i == m.tab {
+			style = m.styles.accent
+		}
+		parts[i] = style.Render(name)
+	}
+	return strings.Join(parts, "  ")
+}
+
 func (m Model) listHeader(width int) string {
+	brand := m.styles.accent.Render("pf") + " " + m.tabsHeader()
+	summary, color := m.headerSummary(width, brand)
+	return brand + strings.Repeat(" ", max(1, width-ansi.StringWidth(brand)-ansi.StringWidth(summary))) + color.Render(summary)
+}
+
+// headerSummary picks the top-right status for the active tab: tunnel states
+// on Tunnels, the listening-port count on Ports.
+func (m Model) headerSummary(width int, brand string) (string, lipgloss.Style) {
+	if m.tab == tabPorts {
+		switch {
+		case m.portsErr != "":
+			return "Scan failed", m.styles.bad
+		case m.portsBusy:
+			return "Scanning…", m.styles.dim
+		default:
+			noun := "ports"
+			if len(m.portsData) == 1 {
+				noun = "port"
+			}
+			return fmt.Sprintf("%d listening %s", len(m.portsData), noun), m.styles.dim
+		}
+	}
 	counts := map[string]int{}
 	for _, t := range m.state.Tunnels {
 		counts[t.Status]++
@@ -70,7 +107,7 @@ func (m Model) listHeader(width int) string {
 	if len(parts) == 0 {
 		summary = "No tunnels"
 	}
-	if ansi.StringWidth(summary) > width-5 {
+	if ansi.StringWidth(summary) > width-5-ansi.StringWidth(brand) {
 		summary = fmt.Sprintf("%d tunnels", len(m.state.Tunnels))
 		if counts["needs_attention"] > 0 {
 			label := "need action"
@@ -91,9 +128,12 @@ func (m Model) listHeader(width int) string {
 	}
 	if !m.connected {
 		summary = "Daemon offline · Last known state"
+		if ansi.StringWidth(brand)+1+ansi.StringWidth(summary) > width {
+			summary = "Daemon offline"
+		}
 		color = m.styles.bad
 	}
-	return m.styles.accent.Render("pf") + strings.Repeat(" ", max(1, width-2-ansi.StringWidth(summary))) + color.Render(summary)
+	return summary, color
 }
 
 func briefError(t daemon.Tunnel) string {
@@ -177,15 +217,16 @@ func (m Model) listFooter(width int, selected *daemon.Tunnel) string {
 		return m.deleteFooter()
 	}
 	if selected == nil {
-		return "a Add · ? Help · q Detach"
+		return "[a] Add · [?] Help · [q] Detach"
 	}
 	action := "Stop"
 	if !selected.Rule.Enabled {
 		action = "Start"
 	}
-	full := "a Add · e Edit · d Delete · Space " + action + " · l Logs · ? Help · q Detach"
+	full := "[a] Add · [e] Edit · [d] Delete · [Space] " + action + " · [l] Logs · [?] Help · [q] Detach"
 	if ansi.StringWidth(full) > width {
-		return "a Add · d Delete · Space " + action + " · ? Help · q Detach"
+		// Narrow terminals keep the destructive and navigation actions.
+		return "[a] Add · [d] Delete · [Space] " + action + " · [q] Detach"
 	}
 	return full
 }
